@@ -6,6 +6,9 @@ pg.joystick.init()
 scale = 1.5
 win_size = (np.array((800, 600)) * scale).astype(int)
 win = pg.display.set_mode(win_size)
+pg.display.set_caption("Draw It - Controller Edition")
+icon = pg.image.load("icon.png")
+pg.display.set_icon(icon)
 win_color = (106, 250, 252)
 win.fill(win_color)
 clock = pg.time.Clock()
@@ -16,6 +19,28 @@ keydict = {
             pg.K_s: (0, 1),
             pg.K_d: (1, 0),
             }
+
+colors = {
+            "White": (255, 255, 255),
+            "Yellow": (255, 255, 0),
+            "Orange": (255, 102, 0),
+            "Red": (221, 0, 0),
+            "Pink": (255, 0, 153),
+            "Purple": (51, 0, 153),
+            "Blue": (0, 0, 204),
+            "Light Blue": (0, 153, 255),
+            "Light Green": (0, 170, 0),
+            "Green": (0, 102, 0),
+            "Dark Brown": (102, 51, 0),
+            "Brown": (153, 102, 51),
+            "Light Grey": (187, 187, 187),
+            "Grey": (136, 136, 136),
+            "Dark Grey": (68, 68, 68),
+            "Black": (0, 0, 0)
+         }
+
+color_list = list(colors.values())
+
 try:
     joystick = pg.joystick.Joystick(0)
     joystick.init()
@@ -28,6 +53,7 @@ class Player:
 
     def __init__(self, size, is_ghost=False):
         self.buttons_pressed = []
+        self.hats_pressed = False
         self.active = True
         self.equal_scale = False
         self.erase_mode = False
@@ -37,8 +63,8 @@ class Player:
         self.size_speed = 3
         self.org_size = size
         self.size = size
-        self.colors = [(150, 0, 0), (255, 0, 0), (255, 255, 255)]
-        self.color = self.colors[self.active]
+        self.color_value = 0
+        self.color = color_list[self.color_value]
         if not is_ghost:
             self.ghost = Player(size, True)
             self.ghost.color = win_color
@@ -47,6 +73,10 @@ class Player:
         self.joystick_movement()
         self.joystick_buttons()
         self.joystick_size()
+
+    def update_color(self):
+        self.color_value %= len(color_list)
+        self.color = color_list[self.color_value]
 
     def joystick_movement(self):
         movement = [0, 0]
@@ -76,17 +106,25 @@ class Player:
 
     def joystick_buttons(self):
 
-        if joystick.get_button(1): # X on PS4 controller
+        if joystick.get_button(1):  # X on PS4 controller
             self.active = True
-            self.color = self.colors[self.active]
+            if self.color not in color_list:
+                self.color = color_list[self.color_value]
         else:
             self.active = False
-            self.color = self.colors[self.active]
+            if self.color in color_list:
+                dark_color = []
+                for value in self.color:
+                    if value - 20 < 0:
+                        dark_color.append(0)
+                    else:
+                        dark_color.append(value - 20)
+                self.color = tuple(dark_color)
 
-        if joystick.get_button(2): # O on PS4 controller
+        if joystick.get_button(2):  # O on PS4 controller
             self.erase_mode = True
 
-        if joystick.get_button(3): # Triangle on PS4 controller
+        if joystick.get_button(3):  # Triangle on PS4 controller
             win.fill(win_color)
 
         if joystick.get_button(5):  # Triangle on PS4 controller
@@ -102,6 +140,13 @@ class Player:
             if joystick.get_button(i) and i not in self.buttons_pressed:
                 self.speed *= 2
                 self.buttons_pressed.append(i)
+
+        hat = joystick.get_hat(0)
+        if abs(hat[0]) and not self.hats_pressed:
+            print ("Changing Color")
+            self.color_value += hat[0]
+            self.update_color()
+        self.hats_pressed = abs(hat[0])
 
         for button in self.buttons_pressed:
             if not joystick.get_button(button):
@@ -121,7 +166,7 @@ class Player:
         if self.erase_mode:
             pg.draw.rect(win, self.ghost.color, self.ghost.pos + self.ghost.size)
             if joystick.get_button(2):
-                pg.draw.rect(win, self.colors[2], self.pos + self.size)
+                pg.draw.rect(win, colors["White"], self.pos + self.size)
             else:
                 self.erase_mode = False
         else:
