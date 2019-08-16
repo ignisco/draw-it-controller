@@ -9,8 +9,6 @@ win = pg.display.set_mode(win_size)
 pg.display.set_caption("Draw It - Controller Edition")
 icon = pg.image.load("icon.png")
 pg.display.set_icon(icon)
-win_color = (106, 250, 252)
-win.fill(win_color)
 clock = pg.time.Clock()
 
 keydict = {
@@ -41,6 +39,18 @@ colors = {
 
 color_list = list(colors.values())
 
+win_color = 7
+win.fill(color_list[win_color])
+
+eraser_img = pg.image.load("eraser.png")
+
+
+def update_win_color():
+    global win_color
+    win_color %= len(color_list)
+    win.fill(color_list[win_color])
+
+
 try:
     joystick = pg.joystick.Joystick(0)
     joystick.init()
@@ -67,7 +77,7 @@ class Player:
         self.color = color_list[self.color_value]
         if not is_ghost:
             self.ghost = Player(size, True)
-            self.ghost.color = win_color
+            self.ghost.color = color_list[win_color]
 
     def update(self):
         self.joystick_movement()
@@ -125,13 +135,13 @@ class Player:
             self.erase_mode = True
 
         if joystick.get_button(3):  # Triangle on PS4 controller
-            win.fill(win_color)
+            update_win_color()
 
-        if joystick.get_button(5):  # Triangle on PS4 controller
+        if joystick.get_button(5):  # R1 on PS4 controller
             closest_rect_size = sum(self.size)/len(self.size)
             self.size = (closest_rect_size, closest_rect_size)
 
-        if joystick.get_button(4) and 4 not in self.buttons_pressed:
+        if joystick.get_button(4) and 4 not in self.buttons_pressed: # L1 on PS4 Controller
             self.equal_scale = True
             self.buttons_pressed.append(4)
 
@@ -143,10 +153,17 @@ class Player:
 
         hat = joystick.get_hat(0)
         if abs(hat[0]) and not self.hats_pressed:
-            print ("Changing Color")
             self.color_value += hat[0]
             self.update_color()
-        self.hats_pressed = abs(hat[0])
+        elif abs(hat[1]) and not self.hats_pressed:
+            global win_color
+            win_color += hat[1]
+            update_win_color()
+            self.ghost.color = color_list[win_color]
+        if abs(hat[0]) or abs(hat[1]):
+            self.hats_pressed = True
+        else:
+            self.hats_pressed = False
 
         for button in self.buttons_pressed:
             if not joystick.get_button(button):
@@ -166,7 +183,9 @@ class Player:
         if self.erase_mode:
             pg.draw.rect(win, self.ghost.color, self.ghost.pos + self.ghost.size)
             if joystick.get_button(2):
-                pg.draw.rect(win, colors["White"], self.pos + self.size)
+                eraser = eraser_img.copy()
+                eraser = pg.transform.scale(eraser, tuple(int(i) for i in self.size))
+                win.blit(eraser, self.pos + self.size)
             else:
                 self.erase_mode = False
         else:
@@ -190,7 +209,7 @@ while running:
                 running = False
                 break
             if event.key == pg.K_c:
-                win.fill(win_color)
+                update_win_color()
 
     # Drawing
 
