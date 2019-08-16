@@ -1,5 +1,6 @@
 import pygame as pg
 import numpy as np
+import Prompt
 
 pg.init()
 pg.joystick.init()
@@ -49,6 +50,7 @@ def update_win_color():
     global win_color
     win_color %= len(color_list)
     win.fill(color_list[win_color])
+    drawings.append(win.copy())
 
 
 try:
@@ -62,6 +64,7 @@ except pg.error:
 class Player:
 
     def __init__(self, size, is_ghost=False):
+        self.freeze = False
         self.buttons_pressed = []
         self.hats_pressed = False
         self.active = True
@@ -80,6 +83,8 @@ class Player:
             self.ghost.color = color_list[win_color]
 
     def update(self):
+        if self.freeze:
+            return
         self.joystick_movement()
         self.joystick_buttons()
         self.joystick_size()
@@ -120,6 +125,9 @@ class Player:
             self.active = True
             if self.color not in color_list:
                 self.color = color_list[self.color_value]
+
+            if 1 not in self.buttons_pressed:
+                self.buttons_pressed.append(1)
         else:
             self.active = False
             if self.color in color_list:
@@ -134,8 +142,10 @@ class Player:
         if joystick.get_button(2):  # O on PS4 controller
             self.erase_mode = True
 
-        if joystick.get_button(3):  # Triangle on PS4 controller
-            update_win_color()
+        if joystick.get_button(0) and 0 not in self.buttons_pressed:  # Square on PS4 controller
+            if len(drawings) > 1:
+                drawings.pop(-1)
+                self.buttons_pressed.append(0)
 
         if joystick.get_button(5):  # R1 on PS4 controller
             closest_rect_size = sum(self.size)/len(self.size)
@@ -150,6 +160,17 @@ class Player:
             if joystick.get_button(i) and i not in self.buttons_pressed:
                 self.speed *= 2
                 self.buttons_pressed.append(i)
+
+        if joystick.get_button(8):  # Share on PS4 controller
+            global prompt
+            prompt_pos = (win_size[0] / 2, win_size[1] / 3)
+            prompt_size = (160, 90)
+            button_yes = Prompt.Button((prompt_pos[0] - prompt_size[0] * 0.1, prompt_pos[1] + prompt_size[1] * 0.8),
+                                       (32, 18), "Yes")
+            input_field = Prompt.InputField((prompt_pos[0] - prompt_size[0] * 0.4, prompt_pos[1] - prompt_size[1] * 0), "Drawing.png")
+            prompt = (Prompt.Prompt(prompt_pos, prompt_size, "Would you like to save?", (button_yes,), input_field))
+
+            self.freeze = True
 
         hat = joystick.get_hat(0)
         if abs(hat[0]) and not self.hats_pressed:
@@ -173,12 +194,15 @@ class Player:
                 if button == 4:
                     self.equal_scale = False
 
+                if button == 1:
+                    drawings.append(win.copy())
+
     def draw(self):
-        global drawing
+        global drawings, drawing
         if not self.active and not self.erase_mode:
-            drawing = win.copy()
+            drawing = False
         else:
-            drawing = None
+            drawing = True
 
         if self.erase_mode:
             pg.draw.rect(win, self.ghost.color, self.ghost.pos + self.ghost.size)
@@ -187,6 +211,7 @@ class Player:
                 eraser = pg.transform.scale(eraser, tuple(int(i) for i in self.size))
                 win.blit(eraser, self.pos + self.size)
             else:
+                drawings.append(win.copy())
                 self.erase_mode = False
         else:
             pg.draw.rect(win, self.color, self.pos + self.size)
@@ -195,8 +220,11 @@ class Player:
 
 
 objects = [Player((20, 20))]
+prompt = None
 running = True
-drawing = None
+drawing = False
+drawings = [win.copy()]
+
 
 while running:
     events = pg.event.get()[:]
@@ -211,14 +239,36 @@ while running:
             if event.key == pg.K_c:
                 update_win_color()
 
+            if prompt:
+                if event.key == pg.K_DELETE:
+                    prompt.input_field.text = ""
+                elif event.key == pg.K_BACKSPACE:
+                    prompt.input_field.text = prompt.input_field.text[0:-1]
+                elif event.key == pg.K_RETURN:
+                    prompt.save_image()
+                else:
+                    prompt.input_field.text += event.unicode
+
     # Drawing
 
-    if drawing:
-        win.blit(drawing, (0, 0))
+    if len(drawings) > 0 and not drawing:
+        win.blit(drawings[-1], (0, 0))
 
     for object in objects:
         object.update()
         object.draw()
+
+    if prompt:
+        prompt.update()
+        prompt.draw(win)
+
+        if prompt.action:
+            if "c_save" in prompt.action:
+                location = "".join(prompt.action.split("c_save "))
+                pg.image.save(drawings[-1], location)
+            prompt = None
+            for object in objects:
+                object.freeze = False
 
     pg.display.flip()
     clock.tick(60)
